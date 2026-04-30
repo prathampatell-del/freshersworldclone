@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import path from 'path';
 import { initSchema } from './db/schema';
 import { seedDatabase } from './db/seed';
 import authRouter from './routes/auth';
@@ -37,6 +38,13 @@ app.use('/api/users', usersRouter);
 app.use('/api/courses', coursesRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+// Serve Vite build — dist/server/index.js is one level below dist/
+const clientDist = path.join(__dirname, '..');
+app.use(express.static(clientDist));
+app.use((_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);
