@@ -44,7 +44,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
     LEFT JOIN jobs j ON j.company_id = c.id AND j.is_active = TRUE
     WHERE c.id = $1
     GROUP BY c.id
-  `, [parseInt(req.params.id)])).rows[0];
+  `, [parseInt(req.params.id as string)])).rows[0];
 
   if (!company) {
     res.status(404).json({ error: 'Company not found' });
@@ -90,7 +90,7 @@ router.post('/', authenticate, requireRole('employer'), async (req: AuthRequest,
 });
 
 router.put('/:id', authenticate, requireRole('employer', 'admin'), async (req: AuthRequest, res: Response) => {
-  const company = (await pool.query('SELECT id FROM companies WHERE id = $1 AND user_id = $2', [parseInt(req.params.id), req.user!.id])).rows[0];
+  const company = (await pool.query('SELECT id FROM companies WHERE id = $1 AND user_id = $2', [parseInt(req.params.id as string), req.user!.id])).rows[0];
   if (!company && req.user!.role !== 'admin') {
     res.status(404).json({ error: 'Not found or unauthorized' });
     return;
@@ -110,7 +110,7 @@ router.put('/:id', authenticate, requireRole('employer', 'admin'), async (req: A
     return;
   }
 
-  await pool.query(`UPDATE companies SET ${setClauses.join(', ')} WHERE id = ${$(parseInt(req.params.id))}`, p);
+  await pool.query(`UPDATE companies SET ${setClauses.join(', ')} WHERE id = ${$(parseInt(req.params.id as string))}`, p);
   res.json({ message: 'Updated' });
 });
 
@@ -124,14 +124,14 @@ router.post('/:id/reviews', authenticate, requireRole('jobseeker'), async (req: 
     await pool.query(`
       INSERT INTO company_reviews (company_id, user_id, rating, title, review, pros, cons)
       VALUES ($1,$2,$3,$4,$5,$6,$7)
-    `, [parseInt(req.params.id), req.user!.id, rating, title || null, review || null, pros || null, cons || null]);
+    `, [parseInt(req.params.id as string), req.user!.id, rating, title || null, review || null, pros || null, cons || null]);
 
     const { rows: [avg] } = await pool.query(
       'SELECT AVG(rating) as avg, COUNT(*) as cnt FROM company_reviews WHERE company_id = $1',
-      [parseInt(req.params.id)]
+      [parseInt(req.params.id as string)]
     );
     await pool.query('UPDATE companies SET rating = $1, review_count = $2 WHERE id = $3', [
-      parseFloat(avg.avg), parseInt(avg.cnt), parseInt(req.params.id)
+      parseFloat(avg.avg), parseInt(avg.cnt), parseInt(req.params.id as string)
     ]);
 
     res.status(201).json({ message: 'Review posted' });

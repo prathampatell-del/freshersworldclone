@@ -79,7 +79,7 @@ router.put('/:id/status', authenticate, requireRole('employer', 'admin'), async 
     res.status(400).json({ error: 'Invalid status' });
     return;
   }
-  await pool.query('UPDATE applications SET status = $1 WHERE id = $2', [status, parseInt(req.params.id)]);
+  await pool.query('UPDATE applications SET status = $1 WHERE id = $2', [status, parseInt(req.params.id as string)]);
   res.json({ message: 'Status updated' });
 });
 

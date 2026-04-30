@@ -32,7 +32,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 });
 
 router.get('/:id', async (req: AuthRequest, res: Response) => {
-  const course = (await pool.query('SELECT * FROM courses WHERE id = $1', [parseInt(req.params.id)])).rows[0];
+  const course = (await pool.query('SELECT * FROM courses WHERE id = $1', [parseInt(req.params.id as string)])).rows[0];
   if (!course) { res.status(404).json({ error: 'Course not found' }); return; }
   res.json(course);
 });

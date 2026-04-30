@@ -71,7 +71,7 @@ router.post('/me/alerts', authenticate, async (req: AuthRequest, res: Response) 
 });
 
 router.delete('/me/alerts/:id', authenticate, async (req: AuthRequest, res: Response) => {
-  await pool.query('DELETE FROM job_alerts WHERE id = $1 AND user_id = $2', [parseInt(req.params.id), req.user!.id]);
+  await pool.query('DELETE FROM job_alerts WHERE id = $1 AND user_id = $2', [parseInt(req.params.id as string), req.user!.id]);
   res.json({ message: 'Alert deleted' });
 });
 

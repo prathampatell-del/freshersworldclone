@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import { jobsApi } from '../../api/jobs';
 import { useToast } from '../../components/ui/Toast';
+import { Job } from '../../types';
 
 const CATEGORIES = ['IT', 'Analytics', 'Finance', 'Marketing', 'HR', 'Operations', 'BPO', 'Banking', 'Teaching', 'Healthcare', 'Sales', 'Engineering'];
 
@@ -14,7 +15,7 @@ export function PostJob() {
   const [form, setForm] = useState({
     title: '',
     description: '',
-    type: 'fulltime',
+    type: 'fulltime' as Job['type'],
     category: 'IT',
     location: '',
     salary_min: '',

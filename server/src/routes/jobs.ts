@@ -72,7 +72,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
            c.description as company_description, c.website as company_website, c.location as company_location
     FROM jobs j LEFT JOIN companies c ON j.company_id = c.id
     WHERE j.id = $1
-  `, [parseInt(req.params.id)])).rows[0];
+  `, [parseInt(req.params.id as string)])).rows[0];
 
   if (!job) {
     res.status(404).json({ error: 'Job not found' });
@@ -137,7 +137,7 @@ router.put('/:id', authenticate, requireRole('employer', 'admin'), async (req: A
     SELECT j.id FROM jobs j
     JOIN companies c ON j.company_id = c.id
     WHERE j.id = $1 AND c.user_id = $2
-  `, [parseInt(req.params.id), req.user!.id])).rows[0];
+  `, [parseInt(req.params.id as string), req.user!.id])).rows[0];
 
   if (!job && req.user!.role !== 'admin') {
     res.status(404).json({ error: 'Job not found or unauthorized' });
@@ -162,17 +162,17 @@ router.put('/:id', authenticate, requireRole('employer', 'admin'), async (req: A
     return;
   }
 
-  await pool.query(`UPDATE jobs SET ${setClauses.join(', ')} WHERE id = ${$(parseInt(req.params.id))}`, p);
+  await pool.query(`UPDATE jobs SET ${setClauses.join(', ')} WHERE id = ${$(parseInt(req.params.id as string))}`, p);
   res.json({ message: 'Updated' });
 });
 
 router.delete('/:id', authenticate, requireRole('employer', 'admin'), async (req: AuthRequest, res: Response) => {
-  await pool.query('UPDATE jobs SET is_active = FALSE WHERE id = $1', [parseInt(req.params.id)]);
+  await pool.query('UPDATE jobs SET is_active = FALSE WHERE id = $1', [parseInt(req.params.id as string)]);
   res.json({ message: 'Job deactivated' });
 });
 
 router.post('/:id/apply', authenticate, requireRole('jobseeker'), async (req: AuthRequest, res: Response) => {
-  const job = (await pool.query('SELECT id FROM jobs WHERE id = $1 AND is_active = TRUE', [parseInt(req.params.id)])).rows[0];
+  const job = (await pool.query('SELECT id FROM jobs WHERE id = $1 AND is_active = TRUE', [parseInt(req.params.id as string)])).rows[0];
   if (!job) {
     res.status(404).json({ error: 'Job not found' });
     return;
@@ -180,7 +180,7 @@ router.post('/:id/apply', authenticate, requireRole('jobseeker'), async (req: Au
   try {
     const { rows } = await pool.query(
       'INSERT INTO applications (job_id, user_id, cover_letter) VALUES ($1,$2,$3) RETURNING id',
-      [parseInt(req.params.id), req.user!.id, req.body.cover_letter || null]
+      [parseInt(req.params.id as string), req.user!.id, req.body.cover_letter || null]
     );
     res.status(201).json({ id: rows[0].id });
   } catch (e: any) {
@@ -193,12 +193,12 @@ router.post('/:id/apply', authenticate, requireRole('jobseeker'), async (req: Au
 });
 
 router.post('/:id/bookmark', authenticate, async (req: AuthRequest, res: Response) => {
-  const existing = (await pool.query('SELECT id FROM bookmarks WHERE user_id = $1 AND job_id = $2', [req.user!.id, parseInt(req.params.id)])).rows[0];
+  const existing = (await pool.query('SELECT id FROM bookmarks WHERE user_id = $1 AND job_id = $2', [req.user!.id, parseInt(req.params.id as string)])).rows[0];
   if (existing) {
-    await pool.query('DELETE FROM bookmarks WHERE user_id = $1 AND job_id = $2', [req.user!.id, parseInt(req.params.id)]);
+    await pool.query('DELETE FROM bookmarks WHERE user_id = $1 AND job_id = $2', [req.user!.id, parseInt(req.params.id as string)]);
     res.json({ bookmarked: false });
   } else {
-    await pool.query('INSERT INTO bookmarks (user_id, job_id) VALUES ($1,$2)', [req.user!.id, parseInt(req.params.id)]);
+    await pool.query('INSERT INTO bookmarks (user_id, job_id) VALUES ($1,$2)', [req.user!.id, parseInt(req.params.id as string)]);
     res.json({ bookmarked: true });
   }
 });
