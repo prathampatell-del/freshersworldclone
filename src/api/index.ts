@@ -46,6 +46,18 @@ export const usersApi = {
   update: (data: Partial<User>) =>
     api.put('/users/me', data),
 
+  uploadResume: (file: File) => {
+    const fd = new FormData();
+    fd.append('resume', file);
+    return api.post<{ resume_url: string; original_name: string; size: number }>(
+      '/users/me/resume',
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+
+  deleteResume: () => api.delete('/users/me/resume'),
+
   bookmarks: (params?: { page?: number; limit?: number }) =>
     api.get<{ bookmarks: any[]; total: number; page: number; pages: number }>('/users/me/bookmarks', { params }),
 

@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# User uploads (resumes etc.)
+uploads/
+
 # Environment
 .env
 .env.local

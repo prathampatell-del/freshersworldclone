@@ -3,6 +3,7 @@ import { User, MapPin, Phone, Mail, Briefcase, Plus, X, Save } from 'lucide-reac
 import { useAuth } from '../contexts/AuthContext';
 import { usersApi } from '../api';
 import { useToast } from '../components/ui/Toast';
+import { ResumeUpload } from '../components/ResumeUpload';
 
 export function Profile() {
   const { user, refreshUser } = useAuth();
@@ -93,6 +94,16 @@ export function Profile() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bio / Summary</label>
                 <textarea value={form.bio} onChange={e => setField('bio', e.target.value)} rows={3} placeholder="Tell recruiters about yourself..." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 resize-none" />
               </div>
+              {user.role === 'jobseeker' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Resume</label>
+                  <ResumeUpload
+                    resumeUrl={user.resume_url}
+                    onChange={() => { void refreshUser(); }}
+                    compact
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Skills</label>
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -145,6 +156,15 @@ export function Profile() {
                       <span key={s} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100 font-medium">{s}</span>
                     ))}
                   </div>
+                </div>
+              )}
+              {user.role === 'jobseeker' && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-gray-700 text-sm mb-2">Resume</h3>
+                  <ResumeUpload
+                    resumeUrl={user.resume_url}
+                    onChange={() => { void refreshUser(); }}
+                  />
                 </div>
               )}
               {!user.skills?.length && !user.bio && (

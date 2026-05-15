@@ -205,6 +205,11 @@ router.post('/:id/apply', authenticate, requireRole('jobseeker'), asyncHandler(a
   const { rows } = await pool.query('SELECT id FROM jobs WHERE id = $1 AND is_active = TRUE', [id]);
   if (!rows[0]) throw notFound('Job not found');
 
+  const seeker = await pool.query('SELECT resume_url FROM users WHERE id = $1', [req.user!.id]);
+  if (!seeker.rows[0]?.resume_url) {
+    throw badRequest('Please upload your resume from your profile before applying.');
+  }
+
   try {
     const { rows: appRows } = await pool.query(
       `INSERT INTO applications (job_id, user_id, cover_letter)

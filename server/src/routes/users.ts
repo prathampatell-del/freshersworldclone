@@ -1,9 +1,11 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { pool } from '../db/schema';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { asyncHandler, badRequest, notFound } from '../utils/http';
 import { parseId, parsePagination, safeJsonArray } from '../utils/validate';
 import { ParamBuilder } from '../utils/sql';
+import { publicUrlForFile, removeUploadByUrl, resumeUpload } from '../utils/uploads';
 
 const router = Router();
 
@@ -54,6 +56,53 @@ router.put('/me', authenticate, asyncHandler(async (req: AuthRequest, res: Respo
     pb.params
   );
   res.json({ message: 'Profile updated' });
+}));
+
+function handleResumeUpload(req: AuthRequest, res: Response, next: NextFunction) {
+  const upload = resumeUpload.single('resume');
+  upload(req as never, res as never, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      const message =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? 'Resume must be 5 MB or smaller'
+          : err.message;
+      return res.status(400).json({ error: message });
+    }
+    if (err instanceof Error) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}
+
+router.post('/me/resume', authenticate, handleResumeUpload, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const file = (req as { file?: Express.Multer.File }).file;
+  if (!file) throw badRequest('No file uploaded. Use the "resume" form field.');
+
+  // Replace the previous resume on disk.
+  const current = await pool.query('SELECT resume_url FROM users WHERE id = $1', [req.user!.id]);
+  removeUploadByUrl(current.rows[0]?.resume_url);
+
+  const url = publicUrlForFile(file.filename);
+  await pool.query(
+    'UPDATE users SET resume_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    [url, req.user!.id]
+  );
+  res.json({
+    resume_url: url,
+    original_name: file.originalname,
+    size: file.size,
+  });
+}));
+
+router.delete('/me/resume', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const current = await pool.query('SELECT resume_url FROM users WHERE id = $1', [req.user!.id]);
+  removeUploadByUrl(current.rows[0]?.resume_url);
+  await pool.query(
+    'UPDATE users SET resume_url = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+    [req.user!.id]
+  );
+  res.json({ message: 'Resume removed' });
 }));
 
 router.get('/me/bookmarks', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {

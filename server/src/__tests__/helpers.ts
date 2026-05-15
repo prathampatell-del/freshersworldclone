@@ -32,12 +32,20 @@ export async function createUser(overrides: Partial<SeedUser> = {}): Promise<See
   const role = overrides.role ?? 'jobseeker';
   const name = overrides.name ?? 'Test User';
   const hash = await bcrypt.hash(password, 4);
+  // Seed a fake resume URL for jobseekers so apply-flow tests don't need to
+  // wire up an actual file upload. Tests that exercise the missing-resume
+  // path can override this via setUserResume.
+  const resumeUrl = role === 'jobseeker' ? '/uploads/resumes/test-resume.pdf' : null;
   const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, role, name)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [email, hash, role, name]
+    `INSERT INTO users (email, password_hash, role, name, resume_url)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [email, hash, role, name, resumeUrl]
   );
   return { id: rows[0].id, email, password, role, name };
+}
+
+export async function setUserResume(userId: number, resumeUrl: string | null) {
+  await pool.query('UPDATE users SET resume_url = $1 WHERE id = $2', [resumeUrl, userId]);
 }
 
 export async function createCompany(userId: number, name = 'Acme Corp'): Promise<number> {

@@ -10,6 +10,7 @@ import applicationsRouter from './routes/applications';
 import usersRouter from './routes/users';
 import coursesRouter from './routes/courses';
 import { HttpError } from './utils/http';
+import { UPLOADS_DIR } from './utils/uploads';
 
 export interface CreateAppOptions {
   /**
@@ -31,6 +32,19 @@ export function createApp(opts: CreateAppOptions = {}) {
   app.use(cors({ origin: allowedOrigins, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
+
+  // Uploaded files (resumes). Served with Content-Disposition: inline so PDFs
+  // open in-browser; binaries are streamed via express.static.
+  app.use(
+    '/uploads',
+    express.static(UPLOADS_DIR, {
+      fallthrough: false,
+      maxAge: '1d',
+      setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+      },
+    })
+  );
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
