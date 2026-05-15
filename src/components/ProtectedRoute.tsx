@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { PageSpinner } from './ui/States';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,9 +12,7 @@ export function ProtectedRoute({ children, roles, redirect = '/login' }: Protect
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full" /></div>;
-  }
+  if (loading) return <PageSpinner label="Checking your session" />;
 
   if (!user) {
     return <Navigate to={redirect} state={{ from: location }} replace />;

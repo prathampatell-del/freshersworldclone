@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, X, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { jobsApi, JobFilters } from '../api/jobs';
 import { Job } from '../types';
 import { JobCard } from '../components/JobCard';
 import { Pagination } from '../components/ui/Pagination';
 import { JobCardSkeleton } from '../components/ui/Skeleton';
+import { EmptyState, ErrorState } from '../components/ui/States';
 
 const CATEGORIES = ['IT', 'Analytics', 'Finance', 'Marketing', 'HR', 'Operations', 'BPO', 'Banking', 'Teaching', 'Healthcare'];
 const LOCATIONS = ['Delhi', 'Mumbai', 'Bangalore', 'Hyderabad', 'Chennai', 'Pune', 'Noida', 'Kolkata'];
@@ -32,11 +33,12 @@ interface JobsListProps {
 }
 
 export function JobsList({ presetType, title }: JobsListProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const [filters, setFilters] = useState<FilterState>({
@@ -52,6 +54,7 @@ export function JobsList({ presetType, title }: JobsListProps) {
 
   const fetchJobs = useCallback(async (f: FilterState, p: number) => {
     setLoading(true);
+    setError(null);
     try {
       const salaryRange = SALARY_RANGES[f.salaryIdx];
       const params: JobFilters = {
@@ -69,6 +72,14 @@ export function JobsList({ presetType, title }: JobsListProps) {
       setJobs(res.data.jobs);
       setTotal(res.data.total);
       setPages(res.data.pages);
+    } catch (e: unknown) {
+      const message =
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? 'Could not load jobs. Please check your connection.';
+      setError(message);
+      setJobs([]);
+      setTotal(0);
+      setPages(1);
     } finally {
       setLoading(false);
     }
@@ -243,18 +254,26 @@ export function JobsList({ presetType, title }: JobsListProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Array.from({ length: 6 }).map((_, i) => <JobCardSkeleton key={i} />)}
             </div>
+          ) : error ? (
+            <ErrorState
+              title="Couldn’t load jobs"
+              message={error}
+              onRetry={() => fetchJobs(filters, page)}
+            />
           ) : jobs.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-              <Search size={40} className="text-gray-300 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-700 mb-1">No jobs found</h3>
-              <p className="text-sm text-gray-500 mb-4">Try adjusting your search or filters</p>
-              <button
-                onClick={() => { setFilters({ q: '', location: '', type: presetType || '', category: '', salaryIdx: 0, experience: '' }); setLocalQ(''); }}
-                className="text-orange-500 text-sm font-medium hover:underline"
-              >
-                Clear all filters
-              </button>
-            </div>
+            <EmptyState
+              icon={<Search size={40} />}
+              title="No jobs found"
+              message="Try adjusting your search or filters."
+              action={
+                <button
+                  onClick={() => { setFilters({ q: '', location: '', type: presetType || '', category: '', salaryIdx: 0, experience: '' }); setLocalQ(''); }}
+                  className="text-orange-500 text-sm font-medium hover:underline"
+                >
+                  Clear all filters
+                </button>
+              }
+            />
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

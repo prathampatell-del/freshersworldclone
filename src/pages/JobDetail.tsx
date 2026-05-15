@@ -10,6 +10,7 @@ import { Job } from '../types';
 import { JobTypeBadge } from '../components/ui/Badge';
 import { JobCard } from '../components/JobCard';
 import { Skeleton } from '../components/ui/Skeleton';
+import { ErrorState } from '../components/ui/States';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
 
@@ -33,15 +34,24 @@ export function JobDetail() {
   const [coverLetter, setCoverLetter] = useState('');
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [loadError, setLoadError] = useState<{ status?: number; message: string } | null>(null);
 
-  useEffect(() => {
+  const loadJob = () => {
     setLoading(true);
+    setLoadError(null);
     jobsApi.get(id!).then(res => {
       setData(res.data);
       setBookmarked(!!res.data.job.is_bookmarked);
       setApplied(!!res.data.job.has_applied);
-    }).catch(() => navigate('/jobs')).finally(() => setLoading(false));
-  }, [id, navigate]);
+    }).catch((e: { response?: { status?: number; data?: { error?: string } } }) => {
+      setLoadError({
+        status: e?.response?.status,
+        message: e?.response?.data?.error ?? 'Failed to load this job.',
+      });
+    }).finally(() => setLoading(false));
+  };
+
+  useEffect(loadJob, [id]);
 
   const toggleBookmark = async () => {
     if (!user) { navigate('/login'); return; }
@@ -83,6 +93,21 @@ export function JobDetail() {
             <Skeleton className="h-40" />
             <Skeleton className="h-40" />
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-10">
+        <ErrorState
+          title={loadError.status === 404 ? 'Job not found' : 'Could not load this job'}
+          message={loadError.status === 404 ? 'It may have been removed or deactivated.' : loadError.message}
+          onRetry={loadError.status === 404 ? undefined : loadJob}
+        />
+        <div className="text-center mt-4">
+          <Link to="/jobs" className="text-orange-500 hover:underline text-sm font-medium">← Browse all jobs</Link>
         </div>
       </div>
     );

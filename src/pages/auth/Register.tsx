@@ -4,6 +4,32 @@ import { Eye, EyeOff, User, Briefcase } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 
+interface FormState {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirm: string;
+}
+
+type FieldErrors = Partial<Record<keyof FormState, string>>;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD = 6;
+
+function validate(form: FormState): FieldErrors {
+  const errors: FieldErrors = {};
+  if (!form.name.trim()) errors.name = 'Please enter your name';
+  if (!form.email.trim()) errors.email = 'Email is required';
+  else if (!EMAIL_RE.test(form.email)) errors.email = 'Enter a valid email';
+  if (form.phone && !/^\+?\d[\d\s-]{6,15}$/.test(form.phone)) errors.phone = 'Enter a valid phone number';
+  if (!form.password) errors.password = 'Password is required';
+  else if (form.password.length < MIN_PASSWORD) errors.password = `Min ${MIN_PASSWORD} characters`;
+  if (!form.confirm) errors.confirm = 'Please confirm your password';
+  else if (form.password !== form.confirm) errors.confirm = 'Passwords do not match';
+  return errors;
+}
+
 export function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -12,24 +38,34 @@ export function Register() {
   const [role, setRole] = useState<'jobseeker' | 'employer'>(
     (searchParams.get('role') as 'jobseeker' | 'employer') || 'jobseeker'
   );
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
+  const [form, setForm] = useState<FormState>({ name: '', email: '', phone: '', password: '', confirm: '' });
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const setField = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const setField = (k: keyof FormState, v: string) => {
+    setForm(f => ({ ...f, [k]: v }));
+    if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password) { toast('Please fill all required fields', 'error'); return; }
-    if (form.password !== form.confirm) { toast('Passwords do not match', 'error'); return; }
-    if (form.password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+    const validationErrors = validate(form);
+    setErrors(validationErrors);
+    if (Object.values(validationErrors).some(Boolean)) {
+      toast('Please fix the highlighted fields', 'error');
+      return;
+    }
     setLoading(true);
     try {
-      await register({ name: form.name, email: form.email, password: form.password, phone: form.phone, role });
+      await register({ name: form.name.trim(), email: form.email.trim(), password: form.password, phone: form.phone || undefined, role });
       toast('Account created successfully!');
       navigate(role === 'employer' ? '/employer/dashboard' : '/dashboard');
-    } catch (e: any) {
-      toast(e.response?.data?.error || 'Registration failed', 'error');
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? 'Registration failed. Please try again.';
+      toast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -48,77 +84,108 @@ export function Register() {
         </div>
 
         {/* Role toggle */}
-        <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
+        <div className="flex bg-gray-100 p-1 rounded-xl mb-6" role="tablist" aria-label="Account type">
           <button
+            type="button"
+            role="tab"
+            aria-selected={role === 'jobseeker'}
             onClick={() => setRole('jobseeker')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition ${role === 'jobseeker' ? 'bg-white shadow text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            <User size={16} /> Job Seeker
+            <User size={16} aria-hidden="true" /> Job Seeker
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={role === 'employer'}
             onClick={() => setRole('employer')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition ${role === 'employer' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            <Briefcase size={16} /> Employer
+            <Briefcase size={16} aria-hidden="true" /> Employer
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{role === 'employer' ? 'Company/Contact Name' : 'Full Name'} *</label>
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <FieldGroup
+            id="reg-name"
+            label={role === 'employer' ? 'Company / Contact Name' : 'Full Name'}
+            required
+            error={errors.name}
+          >
             <input
+              id="reg-name"
               value={form.name}
+              autoComplete="name"
+              aria-invalid={!!errors.name}
               onChange={e => setField('name', e.target.value)}
               placeholder={role === 'employer' ? 'HR Manager / Company Name' : 'Your full name'}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+              className={inputCls(errors.name)}
               autoFocus
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+          </FieldGroup>
+
+          <FieldGroup id="reg-email" label="Email Address" required error={errors.email}>
             <input
+              id="reg-email"
               type="email"
+              autoComplete="email"
+              aria-invalid={!!errors.email}
               value={form.email}
               onChange={e => setField('email', e.target.value)}
               placeholder="you@example.com"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+              className={inputCls(errors.email)}
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+          </FieldGroup>
+
+          <FieldGroup id="reg-phone" label="Phone Number" error={errors.phone}>
             <input
+              id="reg-phone"
               type="tel"
+              autoComplete="tel"
+              aria-invalid={!!errors.phone}
               value={form.phone}
               onChange={e => setField('phone', e.target.value)}
               placeholder="10-digit mobile number"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+              className={inputCls(errors.phone)}
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+          </FieldGroup>
+
+          <FieldGroup id="reg-password" label="Password" required error={errors.password}>
             <div className="relative">
               <input
+                id="reg-password"
                 type={showPw ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-invalid={!!errors.password}
                 value={form.password}
                 onChange={e => setField('password', e.target.value)}
-                placeholder="Minimum 6 characters"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition pr-10"
+                placeholder={`Minimum ${MIN_PASSWORD} characters`}
+                className={`${inputCls(errors.password)} pr-10`}
               />
-              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <button
+                type="button"
+                onClick={() => setShowPw(p => !p)}
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
+          </FieldGroup>
+
+          <FieldGroup id="reg-confirm" label="Confirm Password" required error={errors.confirm}>
             <input
+              id="reg-confirm"
               type="password"
+              autoComplete="new-password"
+              aria-invalid={!!errors.confirm}
               value={form.confirm}
               onChange={e => setField('confirm', e.target.value)}
               placeholder="Repeat password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+              className={inputCls(errors.confirm)}
             />
-          </div>
+          </FieldGroup>
+
           <p className="text-xs text-gray-400">
             By registering, you agree to our <a href="#" className="text-orange-500 hover:underline">Terms of Service</a> and <a href="#" className="text-orange-500 hover:underline">Privacy Policy</a>.
           </p>
@@ -127,7 +194,7 @@ export function Register() {
             disabled={loading}
             className="w-full bg-orange-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-orange-600 transition disabled:opacity-60"
           >
-            {loading ? 'Creating account...' : `Create ${role === 'employer' ? 'Employer' : ''} Account`}
+            {loading ? 'Creating account...' : `Create ${role === 'employer' ? 'Employer ' : ''}Account`}
           </button>
         </form>
 
@@ -136,6 +203,34 @@ export function Register() {
           <Link to="/login" className="text-orange-500 font-semibold hover:underline">Sign in</Link>
         </p>
       </div>
+    </div>
+  );
+}
+
+function inputCls(error?: string) {
+  return `w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 transition ${
+    error
+      ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+      : 'border-gray-300 focus:border-orange-400 focus:ring-orange-400'
+  }`;
+}
+
+interface FieldGroupProps {
+  id: string;
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}
+
+function FieldGroup({ id, label, required, error, children }: FieldGroupProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5" aria-hidden="true"> *</span>}
+      </label>
+      {children}
+      {error && <p id={`${id}-error`} role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

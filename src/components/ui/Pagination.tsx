@@ -10,7 +10,7 @@ interface PaginationProps {
 export function Pagination({ page, pages, total, onPageChange }: PaginationProps) {
   if (pages <= 1) return null;
 
-  const getPages = () => {
+  const buildPageList = () => {
     const p: (number | '...')[] = [];
     if (pages <= 7) {
       for (let i = 1; i <= pages; i++) p.push(i);
@@ -25,21 +25,24 @@ export function Pagination({ page, pages, total, onPageChange }: PaginationProps
   };
 
   return (
-    <div className="flex items-center justify-center gap-1 mt-6">
+    <nav className="flex items-center justify-center gap-1 mt-6" aria-label="Pagination">
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
+        aria-label="Previous page"
         className="p-2 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition"
       >
         <ChevronLeft size={16} />
       </button>
-      {getPages().map((p, i) =>
+      {buildPageList().map((p, i) =>
         p === '...' ? (
-          <span key={`dots-${i}`} className="px-2 py-1 text-gray-400">...</span>
+          <span key={`dots-${i}`} className="px-2 py-1 text-gray-400" aria-hidden="true">…</span>
         ) : (
           <button
             key={p}
             onClick={() => onPageChange(p as number)}
+            aria-current={p === page ? 'page' : undefined}
+            aria-label={`Page ${p}`}
             className={`min-w-[36px] px-3 py-1.5 rounded border text-sm font-medium transition ${
               p === page
                 ? 'bg-orange-500 text-white border-orange-500'
@@ -53,11 +56,12 @@ export function Pagination({ page, pages, total, onPageChange }: PaginationProps
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page === pages}
+        aria-label="Next page"
         className="p-2 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition"
       >
         <ChevronRight size={16} />
       </button>
-      <span className="ml-2 text-xs text-gray-500">{total} results</span>
-    </div>
+      <span className="ml-2 text-xs text-gray-500" aria-live="polite">{total} results</span>
+    </nav>
   );
 }
