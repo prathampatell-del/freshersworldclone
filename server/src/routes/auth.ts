@@ -1,75 +1,92 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../db/schema';
-import { authenticate, signToken, AuthRequest } from '../middleware/auth';
+import { authenticate, cookieOptions, signToken, AuthRequest } from '../middleware/auth';
+import { asyncHandler, badRequest, conflict, notFound, unauthorized } from '../utils/http';
+import { requireFields, safeJsonArray, validEmail } from '../utils/validate';
 
 const router = Router();
 
-router.post('/register', async (req: Request, res: Response) => {
-  const { email, password, name, role = 'jobseeker', phone, location } = req.body;
-  if (!email || !password || !name) {
-    res.status(400).json({ error: 'Email, password and name are required' });
-    return;
+const ALLOWED_ROLES = ['jobseeker', 'employer'] as const;
+const MIN_PASSWORD = 6;
+const MAX_NAME = 100;
+
+router.post('/register', asyncHandler(async (req: Request, res: Response) => {
+  const { email, password, name, role = 'jobseeker', phone, location } = req.body ?? {};
+  requireFields(req.body ?? {}, ['email', 'password', 'name']);
+
+  if (!validEmail(email)) throw badRequest('Invalid email address');
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD) {
+    throw badRequest(`Password must be at least ${MIN_PASSWORD} characters`);
   }
-  if (!['jobseeker', 'employer'].includes(role)) {
-    res.status(400).json({ error: 'Invalid role' });
-    return;
+  if (typeof name !== 'string' || name.length > MAX_NAME) {
+    throw badRequest('Name must be 1–100 characters');
   }
-  const existing = (await pool.query('SELECT id FROM users WHERE email = $1', [email])).rows[0];
-  if (existing) {
-    res.status(409).json({ error: 'Email already registered' });
-    return;
-  }
+  if (!ALLOWED_ROLES.includes(role)) throw badRequest('Invalid role');
+
+  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+  if (existing.rows[0]) throw conflict('Email already registered');
+
   const hash = await bcrypt.hash(password, 10);
   const { rows } = await pool.query(
-    'INSERT INTO users (email, password_hash, role, name, phone, location) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-    [email, hash, role, name, phone || null, location || null]
+    `INSERT INTO users (email, password_hash, role, name, phone, location)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     RETURNING id, email, role, name, phone, location, experience_years, created_at`,
+    [email.toLowerCase(), hash, role, name.trim(), phone || null, location || null]
   );
-  const id = rows[0].id;
-  const token = signToken({ id, role, email });
-  res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 3600 * 1000 });
-  res.json({ token, user: { id, email, name, role } });
-});
-
-router.post('/login', async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    res.status(400).json({ error: 'Email and password required' });
-    return;
-  }
-  const user = (await pool.query('SELECT * FROM users WHERE email = $1', [email])).rows[0];
-  if (!user) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
-  const valid = await bcrypt.compare(password, user.password_hash);
-  if (!valid) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
+  const user = rows[0];
   const token = signToken({ id: user.id, role: user.role, email: user.email });
-  res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 3600 * 1000 });
-  const { password_hash, ...safeUser } = user;
-  res.json({ token, user: safeUser });
-});
+  res.cookie('token', token, cookieOptions());
+  res.status(201).json({
+    token,
+    user: { ...user, skills: [], education: [] },
+  });
+}));
+
+router.post('/login', asyncHandler(async (req: Request, res: Response) => {
+  const { email, password } = req.body ?? {};
+  requireFields(req.body ?? {}, ['email', 'password']);
+  if (!validEmail(email)) throw badRequest('Invalid email address');
+
+  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+  const user = result.rows[0];
+  // Constant-ish: compare against a placeholder hash to avoid easy user enumeration timing
+  const placeholderHash = '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidi';
+  const valid = await bcrypt.compare(password as string, user?.password_hash ?? placeholderHash);
+  if (!user || !valid) throw unauthorized('Invalid credentials');
+
+  const token = signToken({ id: user.id, role: user.role, email: user.email });
+  res.cookie('token', token, cookieOptions());
+  const { password_hash: _ignored, skills, education, ...safeUser } = user;
+  res.json({
+    token,
+    user: {
+      ...safeUser,
+      skills: safeJsonArray(skills),
+      education: safeJsonArray(education),
+    },
+  });
+}));
 
 router.post('/logout', (_req: Request, res: Response) => {
-  res.clearCookie('token');
+  res.clearCookie('token', { ...cookieOptions(), maxAge: 0 });
   res.json({ message: 'Logged out' });
 });
 
-router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const user = (await pool.query(
-    'SELECT id, email, role, name, phone, location, experience_years, resume_url, profile_photo, bio, skills, education, created_at FROM users WHERE id = $1',
+router.get('/me', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { rows } = await pool.query(
+    `SELECT id, email, role, name, phone, location, experience_years, resume_url,
+            profile_photo, bio, skills, education, created_at
+     FROM users WHERE id = $1`,
     [req.user!.id]
-  )).rows[0];
-  if (!user) {
-    res.status(404).json({ error: 'User not found' });
-    return;
-  }
-  user.skills = JSON.parse(user.skills || '[]');
-  user.education = JSON.parse(user.education || '[]');
-  res.json(user);
-});
+  );
+  const user = rows[0];
+  if (!user) throw notFound('User not found');
+  res.json({
+    ...user,
+    skills: safeJsonArray(user.skills),
+    education: safeJsonArray(user.education),
+  });
+}));
 
 export default router;
